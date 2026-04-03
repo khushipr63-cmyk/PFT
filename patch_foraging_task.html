@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Patch Foraging Task</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #bfbfbf; /* PsychoPy (0.5,0.5,0.5) → #bfbfbf */
+      font-family: Arial, sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Outer border frame (matches PsychoPy border) ── */
+    #border-frame {
+      position: fixed;
+      top: 60px; left: 80px; right: 80px; bottom: 60px;
+      border: 4px solid black;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* ── Screens ── */
+    .screen {
+      display: none;
+      position: fixed;
+      top: 60px; left: 80px; right: 80px; bottom: 60px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .screen.active { display: flex; }
+
+    /* ── Info dialog ── */
+    #screen-form {
+      background: #bfbfbf;
+      padding: 40px;
+      font-size: 22px;
+      line-height: 2.2;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    #screen-form input, #screen-form select {
+      font-size: 20px;
+      padding: 4px 8px;
+      margin-left: 8px;
+      width: 180px;
+    }
+    #screen-form button {
+      margin-top: 24px;
+      font-size: 22px;
+      padding: 10px 40px;
+      cursor: pointer;
+    }
+
+    /* ── Instructions ── */
+    #screen-instructions {
+      padding: 50px;
+      font-size: 22px;
+      line-height: 1.9;
+      color: black;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    /* ── Main task ── */
+    #screen-task {
+      background: #bfbfbf;
+    }
+
+    /* HUD */
+    #hud {
+      position: fixed;
+      top: 68px; left: 88px; right: 88px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 22px;
+      font-weight: bold;
+      color: black;
+      padding: 8px 12px;
+    }
+
+    /* Bush area */
+    #bush-area {
+      position: relative;
+      width: 340px;
+      height: 380px;
+      margin-top: 20px;
+      overflow: visible;
+    }
+
+    /* SVG bush fills the bush-area */
+    #bush-svg {
+      width: 340px;
+      height: 380px;
+    }
+
+    /* Reward popup */
+    #reward-popup {
+      display: none;
+      background: black;
+      border: 3px solid white;
+      color: white;
+      font-size: 26px;
+      font-weight: bold;
+      padding: 12px 30px;
+      text-align: center;
+      margin-bottom: 10px;
+      min-width: 200px;
+    }
+
+    /* Bottom prompt */
+    #choice-prompt {
+      position: fixed;
+      bottom: 75px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 26px;
+      font-weight: bold;
+      color: black;
+    }
+
+    /* ── Travel screen ── */
+    #screen-travel {
+      font-size: 30px;
+      font-weight: bold;
+      color: black;
+      text-align: center;
+      gap: 20px;
+    }
+
+    /* ── End screen ── */
+    #screen-end {
+      font-size: 30px;
+      color: black;
+      text-align: center;
+      gap: 20px;
+    }
+    #screen-end button {
+      font-size: 22px;
+      padding: 12px 40px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="border-frame"></div>
+
+<!-- ══ SCREEN 1: Participant Info ══════════════════════════════════════════ -->
+<div id="screen-form" class="screen active">
+  <div>
+    <h2 style="font-size:28px;margin-bottom:20px;">Patch Foraging Task</h2>
+    <div>
+      <label>Participant ID:
+        <input type="text" id="input-participant" required />
+      </label>
+    </div>
+    <div>
+      <label>Session:
+        <input type="text" id="input-session" value="001" required />
+      </label>
+    </div>
+    <button onclick="submitForm()">Continue</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2: Instructions ═══════════════════════════════════════════════ -->
+<div id="screen-instructions" class="screen">
+  <div>
+    <p><strong>Welcome to the Patch Foraging Task!</strong></p><br>
+    <p>• In this task, you will see a tree patch with berries displayed on the screen.</p><br>
+    <p>• You can either choose to <strong>stay</strong> in the same patch and collect berries,<br>
+       &nbsp;&nbsp;or <strong>leave</strong> and travel to a new patch.</p><br>
+    <p>• Moving to a new patch will incur a travel time of either 5, 10, or 20 seconds.</p><br>
+    <p>• Your goal is to collect the maximum amount of berries in <strong>8 minutes</strong>.</p><br>
+    <p>• Press <strong>SPACE</strong> to stay in the patch.</p><br>
+    <p>• Press <strong>L</strong> to leave the patch.</p><br><br>
+    <p style="color:#333;">Press <strong>SPACE</strong> to begin.</p>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3: Main Task ══════════════════════════════════════════════════ -->
+<div id="screen-task" class="screen">
+  <div id="hud">
+    <span id="hud-berries">Total Berries: 0</span>
+    <span id="hud-time">Time: 8:00</span>
+  </div>
+
+  <div id="reward-popup" style="display:none;"></div>
+
+  <!-- Bush drawn as inline SVG so it scales simply -->
+  <div id="bush-area">
+    <svg id="bush-svg" viewBox="0 0 340 380" xmlns="http://www.w3.org/2000/svg">
+      <!-- Trunk -->
+      <rect x="146" y="210" width="48" height="130"
+            fill="rgb(153,89,38)" stroke="rgb(115,64,13)" stroke-width="2"/>
+      <!-- Foliage back -->
+      <circle cx="170" cy="170" r="90"
+              fill="rgb(51,128,51)" stroke="rgb(38,102,38)" stroke-width="2" opacity="0.8"/>
+      <!-- Foliage mid -->
+      <circle cx="152" cy="157" r="80"
+              fill="rgb(64,153,64)" stroke="rgb(51,128,51)" stroke-width="2"/>
+      <!-- Foliage front -->
+      <circle cx="188" cy="151" r="72"
+              fill="rgb(77,179,77)" stroke="rgb(64,153,64)" stroke-width="2"/>
+      <!-- Leaves -->
+      <circle cx="116" cy="138" r="22" fill="rgb(89,191,89)" stroke="rgb(77,166,77)"/>
+      <circle cx="224" cy="138" r="22" fill="rgb(89,191,89)" stroke="rgb(77,166,77)"/>
+      <circle cx="134" cy="100" r="22" fill="rgb(89,191,89)" stroke="rgb(77,166,77)"/>
+      <circle cx="206" cy="100" r="22" fill="rgb(89,191,89)" stroke="rgb(77,166,77)"/>
+      <circle cx="170" cy="90"  r="22" fill="rgb(89,191,89)" stroke="rgb(77,166,77)"/>
+      <!-- Berries (9 total, shown/hidden by JS) -->
+      <circle id="berry-0" cx="129" cy="130" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-1" cx="143" cy="156" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-2" cx="157" cy="120" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-3" cx="170" cy="145" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-4" cx="183" cy="112" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-5" cx="197" cy="150" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-6" cx="211" cy="128" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-7" cx="152" cy="175" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+      <circle id="berry-8" cx="188" cy="172" r="8" fill="rgb(204,26,26)" stroke="rgb(153,13,13)" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <div id="choice-prompt">SPACE = Stay &nbsp;|&nbsp; L = Leave</div>
+</div>
+
+<!-- ══ SCREEN 4: Travel ══════════════════════════════════════════════════════ -->
+<div id="screen-travel" class="screen">
+  <div id="travel-msg">Traveling to new patch...</div>
+  <div id="travel-countdown"></div>
+</div>
+
+<!-- ══ SCREEN 5: End ═════════════════════════════════════════════════════════ -->
+<div id="screen-end" class="screen">
+  <div><strong>Task Complete!</strong></div>
+  <div id="end-score"></div>
+  <button onclick="finishTask()">Save &amp; Finish</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// CONFIGURATION  (mirrors Python exactly)
+// ═══════════════════════════════════════════════════════════════════
+const TASK_DURATION        = 480;        // seconds (8 min)
+const REWARD_DISPLAY_TIME  = 1500;       // ms
+const INITIAL_BERRIES      = 50;
+const MAX_TRIALS_PER_PATCH = 20;
+const TRAVEL_TIMES         = [5, 10, 20];
+const N_BERRIES            = 9;          // berry elements in SVG
+
+// ── DataPipe (replace with your experiment ID) ──
+const DATAPIPE_EXPERIMENT_ID = 'YOUR_DATAPIPE_EXPERIMENT_ID';
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let participant      = '';
+let session          = '001';
+let trialData        = [];
+let totalReward      = 0;
+let trialNumber      = 0;
+let patchNumber      = 1;
+let trialInPatch     = 0;
+let patchStartTime   = null;
+let taskStartTime    = null;
+let depletionSched   = [];
+let currentBerries   = 0;
+let awaitingKey      = false;
+let consecutiveStays = 0;
+let optimalTimes     = {};   // pre-computed MVT optima: {5: N, 10: N, 20: N}
+let hudTimer         = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function getTimestamp() {
+  return new Date().toISOString().replace('T', ' ').replace('Z', '');
+}
+
+function formatTime(sec) {
+  const m = Math.floor(Math.max(0, sec) / 60);
+  const s = Math.floor(Math.max(0, sec) % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/** Mirrors Python generate_depletion_schedule() exactly */
+function generateDepletionSchedule() {
+  const schedule = [INITIAL_BERRIES];
+  let current = INITIAL_BERRIES;
+  for (let t = 1; t < MAX_TRIALS_PER_PATCH; t++) {
+    const remaining = MAX_TRIALS_PER_PATCH - t;
+    if (remaining > 0 && current > 0) {
+      const avg       = current / remaining;
+      const depletion = avg * 0.5 + Math.random() * avg;  // uniform(0.5x, 1.5x)
+      current = Math.max(0, current - depletion);
+    } else {
+      current = 0;
+    }
+    schedule.push(Math.round(current));
+  }
+  schedule[schedule.length - 1] = 0;  // force last to 0
+  return schedule;
+}
+
+/** Update the berry SVG to show the correct number of berries */
+function updateBerries(numBerries) {
+  const toShow = Math.min(
+    Math.ceil(numBerries / INITIAL_BERRIES * N_BERRIES),
+    N_BERRIES
+  );
+  for (let i = 0; i < N_BERRIES; i++) {
+    document.getElementById(`berry-${i}`).style.display = i < toShow ? '' : 'none';
+  }
+}
+
+/** Update HUD */
+function updateHUD() {
+  const elapsed = (performance.now() - taskStartTime) / 1000;
+  document.getElementById('hud-berries').textContent = `Total Berries: ${Math.round(totalReward)}`;
+  document.getElementById('hud-time').textContent    = `Time: ${formatTime(TASK_DURATION - elapsed)}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MVT OPTIMAL LEAVE TIME  (mirrors Python exactly, 100 simulations)
+// ═══════════════════════════════════════════════════════════════════
+function calculateOptimalLeaveTime(travelTime) {
+  const N_SIM = 100;
+  const avg   = new Array(MAX_TRIALS_PER_PATCH).fill(0);
+  for (let s = 0; s < N_SIM; s++) {
+    const sched = generateDepletionSchedule();
+    for (let t = 0; t < MAX_TRIALS_PER_PATCH; t++) avg[t] += sched[t];
+  }
+  for (let t = 0; t < MAX_TRIALS_PER_PATCH; t++) avg[t] /= N_SIM;
+
+  let bestRatio = 0, optTime = 1, cumR = 0;
+  for (let ft = 1; ft <= MAX_TRIALS_PER_PATCH; ft++) {
+    cumR += avg[ft - 1];
+    const ratio = cumR / (travelTime + ft);
+    if (ratio > bestRatio) { bestRatio = ratio; optTime = ft; }
+  }
+  return optTime;
+}
+
+function precomputeOptimal() {
+  for (const tt of TRAVEL_TIMES) optimalTimes[tt] = calculateOptimalLeaveTime(tt);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SCREEN 1 → FORM
+// ═══════════════════════════════════════════════════════════════════
+function submitForm() {
+  const pid = document.getElementById('input-participant').value.trim();
+  const ses = document.getElementById('input-session').value.trim();
+  if (!pid) { alert('Please enter a Participant ID.'); return; }
+  participant = pid;
+  session     = ses || '001';
+  showScreen('screen-instructions');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SCREEN 2 → INSTRUCTIONS
+// ═══════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', function onInstr(e) {
+  if (e.key === ' ' && document.getElementById('screen-instructions').classList.contains('active')) {
+    e.preventDefault();
+    document.removeEventListener('keydown', onInstr);
+    startTask();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// TASK START
+// ═══════════════════════════════════════════════════════════════════
+function startTask() {
+  precomputeOptimal();
+  taskStartTime  = performance.now();
+  patchStartTime = performance.now();
+  totalReward    = 0;
+  trialNumber    = 0;
+  patchNumber    = 1;
+  trialInPatch   = 0;
+  consecutiveStays = 0;
+  depletionSched = generateDepletionSchedule();
+
+  showScreen('screen-task');
+  beginTrial();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TRIAL LOOP
+// ═══════════════════════════════════════════════════════════════════
+function beginTrial() {
+  // Check if 8 minutes are up
+  const elapsed = (performance.now() - taskStartTime) / 1000;
+  if (elapsed >= TASK_DURATION) {
+    endTask();
+    return;
+  }
+
+  trialNumber++;
+  trialInPatch++;
+
+  // Get current berry count from depletion schedule
+  const idx = Math.min(trialInPatch - 1, depletionSched.length - 1);
+  currentBerries = depletionSched[idx];
+
+  updateBerries(currentBerries);
+  updateHUD();
+
+  // Start HUD update loop
+  if (hudTimer) clearInterval(hudTimer);
+  hudTimer = setInterval(() => {
+    updateHUD();
+    const el = (performance.now() - taskStartTime) / 1000;
+    if (el >= TASK_DURATION) { clearInterval(hudTimer); endTask(); }
+  }, 250);
+
+  // Hide reward popup, show prompt
+  document.getElementById('reward-popup').style.display = 'none';
+  document.getElementById('choice-prompt').style.display = 'block';
+
+  // Record onset time for reaction time
+  const trialOnset = performance.now();
+  awaitingKey = true;
+
+  function onChoice(e) {
+    if (!awaitingKey) return;
+    const key = e.key;
+    if (key !== ' ' && key.toLowerCase() !== 'l') return;
+    e.preventDefault();
+
+    awaitingKey = false;
+    document.removeEventListener('keydown', onChoice);
+    clearInterval(hudTimer);
+
+    const rt          = performance.now() - trialOnset;  // ms
+    const choice      = key === ' ' ? 'stay' : 'leave';
+    const timeElapsed = (performance.now() - taskStartTime) / 1000;
+    const timeInPatch = (performance.now() - patchStartTime) / 1000;
+
+    if (choice === 'stay') {
+      handleStay(rt, timeElapsed, timeInPatch);
+    } else {
+      handleLeave(rt, timeElapsed, timeInPatch);
+    }
+  }
+  document.addEventListener('keydown', onChoice);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STAY
+// ═══════════════════════════════════════════════════════════════════
+function handleStay(rt, timeElapsed, timeInPatch) {
+  const reward = currentBerries;
+  totalReward += reward;
+  consecutiveStays++;
+
+  recordTrial({
+    choice:      'stay',
+    reward:      reward,
+    travelTime:  0,
+    rt:          rt,
+    timeElapsed: timeElapsed,
+    timeInPatch: timeInPatch,
+    persev:      consecutiveStays,
+  });
+
+  updateHUD();
+
+  // Show reward popup
+  const popup = document.getElementById('reward-popup');
+  popup.textContent = `+${Math.round(reward)} berries!`;
+  popup.style.display = 'block';
+  document.getElementById('choice-prompt').style.display = 'none';
+
+  setTimeout(() => {
+    popup.style.display = 'none';
+    beginTrial();
+  }, REWARD_DISPLAY_TIME);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEAVE
+// ═══════════════════════════════════════════════════════════════════
+function handleLeave(rt, timeElapsed, timeInPatch) {
+  const travelTime = TRAVEL_TIMES[Math.floor(Math.random() * TRAVEL_TIMES.length)];
+  consecutiveStays = 0;
+
+  recordTrial({
+    choice:      'leave',
+    reward:      0,
+    travelTime:  travelTime,
+    rt:          rt,
+    timeElapsed: timeElapsed,
+    timeInPatch: timeInPatch,
+    persev:      0,
+  });
+
+  showTravelScreen(travelTime);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TRAVEL SCREEN
+// ═══════════════════════════════════════════════════════════════════
+function showTravelScreen(travelTime) {
+  showScreen('screen-travel');
+  document.getElementById('travel-msg').textContent = 'Traveling to new patch...';
+
+  const travelStart = performance.now();
+
+  const timer = setInterval(() => {
+    const remaining = travelTime - (performance.now() - travelStart) / 1000;
+    document.getElementById('travel-countdown').textContent =
+      remaining > 0 ? `${remaining.toFixed(1)} seconds remaining` : '';
+
+    if (remaining <= 0) {
+      clearInterval(timer);
+      // Start new patch
+      patchNumber++;
+      trialInPatch     = 0;
+      consecutiveStays = 0;
+      depletionSched   = generateDepletionSchedule();
+      patchStartTime   = performance.now();
+      showScreen('screen-task');
+      beginTrial();
+    }
+  }, 100);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RECORD TRIAL
+// ═══════════════════════════════════════════════════════════════════
+function recordTrial({ choice, reward, travelTime, rt, timeElapsed, timeInPatch, persev }) {
+  trialData.push({
+    trial_number:      trialNumber,
+    patch_number:      patchNumber,
+    trial_in_patch:    trialInPatch,
+    choice:            choice,
+    reward:            reward,
+    total_reward:      totalReward,
+    travel_time:       travelTime,
+    time_in_patch:     parseFloat(timeInPatch.toFixed(3)),
+    task_time_elapsed: parseFloat(timeElapsed.toFixed(3)),
+    reaction_time:     parseFloat((rt / 1000).toFixed(4)),  // in seconds
+    perseveration:     persev,
+    participant:       participant,
+    session:           session,
+    timestamp:         getTimestamp(),
+    // MVT columns — filled in postProcessData() at end
+    optimal_leave_time: '',
+    diff_from_optimal:  '',
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// END TASK
+// ═══════════════════════════════════════════════════════════════════
+function endTask() {
+  if (hudTimer) clearInterval(hudTimer);
+  postProcessData();
+  document.getElementById('end-score').textContent =
+    `Total Berries Collected: ${Math.round(totalReward)}`;
+  showScreen('screen-end');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MVT POST-PROCESSING  (mirrors Python's diff_from_optimal logic)
+// ═══════════════════════════════════════════════════════════════════
+function postProcessData() {
+  // For each patch find its leave trial (if any)
+  const patchLeave = {};
+  for (const row of trialData) {
+    if (row.choice === 'leave') {
+      patchLeave[row.patch_number] = {
+        actual:     row.trial_in_patch,
+        travelTime: row.travel_time,
+      };
+    }
+  }
+
+  for (const row of trialData) {
+    const pl = patchLeave[row.patch_number];
+    if (pl && pl.travelTime > 0) {
+      const opt = optimalTimes[pl.travelTime] || optimalTimes[10];
+      row.optimal_leave_time = opt;
+      row.diff_from_optimal  = pl.actual - opt;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SAVE TO OSF VIA DATAPIPE
+// ═══════════════════════════════════════════════════════════════════
+function finishTask() {
+  if (trialData.length === 0) { alert('No data to save.'); return; }
+
+  // Build CSV
+  const headers = Object.keys(trialData[0]);
+  const rows    = trialData.map(row =>
+    headers.map(h => {
+      const v = row[h];
+      if (typeof v === 'string' && (v.includes(',') || v.includes('"')))
+        return `"${v.replace(/"/g, '""')}"`;
+      return (v === undefined || v === null) ? '' : v;
+    }).join(',')
+  );
+  const csv = [headers.join(','), ...rows].join('\n');
+
+  const pid      = participant || 'unknown';
+  const ts       = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `foraging_${pid}_${ts}.csv`;
+
+  document.querySelector('#screen-end button').textContent = 'Saving...';
+
+  fetch('https://pipe.jspsych.org/api/data/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': '*/*' },
+    body: JSON.stringify({
+      experimentID: DATAPIPE_EXPERIMENT_ID,
+      filename:     filename,
+      data:         csv,
+    })
+  })
+  .then(r => r.json())
+  .then(() => {
+    document.querySelector('#screen-end button').textContent = 'Data Saved ✓';
+  })
+  .catch(() => {
+    document.querySelector('#screen-end button').textContent = 'Save failed — please screenshot this page';
+  });
+}
+</script>
+
+</body>
+</html>
