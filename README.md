@@ -1,2 +1,0 @@
-# PFT
-Patch Foraging Task
