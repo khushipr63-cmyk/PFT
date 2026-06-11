@@ -657,9 +657,6 @@ function startTask() {
   consecutiveStays = 0;
   depletionSched = generateDepletionSchedule();
 
-  // Periodic save every 60 seconds as safety net
-  setInterval(() => { saveDataNow(); }, 60000);
-
   showScreen('screen-task');
   beginTrial();
 }
@@ -912,10 +909,9 @@ function recordTrial({ choice, reward, travelTime, rt, timeElapsed, timeInPatch,
     optimal_leave_time: '',
     diff_from_optimal:  '',
   });
-  // Save only on leave decisions (not after every stay) to avoid overwhelming DataPipe
-  if (choice === 'leave') {
-    saveDataNow();
-  }
+
+  // Save incrementally after every trial so data is not lost if window closes
+  saveDataNow();
 }
 
 // ═══════════════════════════════════════════════════════════════════
